@@ -1,6 +1,6 @@
 pragma solidity 0.5.8;
 pragma experimental ABIEncoderV2;
-
+//simple safemath library for mathematical operation for uint256 and int256
 library SafeMath {
   /**
   * @dev Multiplies two numbers, reverts on overflow.
@@ -51,15 +51,26 @@ library SafeMath {
 }
 
 contract Factory{
-    mapping(address=>Research) research_mapping;
-    mapping(address=>Buyer) buyer_mapping;
-    
+    mapping(address=>Research) _researchMapping;
+    mapping(address=>Buyer) _buyerMapping;
+    mapping(address=>User) _userMapping;
+
+    //creates a new researcher contract and return its contract address
     function newResearch (string memory name,string memory research_name,string memory field) public payable returns(Research){
-        Research new_research= new Research(name,research_name,field,msg.sender);
-        research_mapping[msg.sender]=new_research;
-        return new_research; 
+        Research newResearch= new Research(name,research_name,field,msg.sender);
+        _researchMapping[msg.sender]=newResearch;
+        return newResearch; 
     }
-    
+    function newBuyer(string memory name) public payable returns(Buyer){
+        Buyer newBuyer= new Buyer(name,msg.sender);
+        _buyerMapping[msg.sender]=newBuyer;
+        return newBuyer;     
+    }
+    function newUser(string memory name) public payable returns(Buyer){
+        Buyer newBuyer= new Buyer(name,msg.sender);
+        _buyerMapping[msg.sender]=newBuyer;
+        return newBuyer;     
+    }    
 }
 contract Research {
     using SafeMath for uint256;
@@ -67,6 +78,7 @@ contract Research {
         address payable patient_address_;
         string patient_data_;
     }
+    mapping(string => data) private dataStore;
     address[] _buyerAddress;
     data[] _patientData;
     string _name;
@@ -80,7 +92,7 @@ contract Research {
         require(msg.sender == _owner);
         _;
     }
-    
+    // constructor to initialize contract
     constructor(string memory name,string memory researcherName,string memory field,address payable owner_address) public payable{
         _name=name;
         _researcherName=researcherName;
@@ -89,9 +101,11 @@ contract Research {
         _totalPatients=0;
     }
     
+    // returns cost price per data which is defined with the constructor
     function getCostPerData()public returns(uint){
         return _costPerData;
     }
+    //used to enter data of users for the research
     function enterData(address payable patient_address,string memory patient_data)public returns(bool){
         data memory newData=data({
             patient_address_:patient_address,
@@ -100,7 +114,7 @@ contract Research {
         _patientData.push(newData);
         _totalPatients++;
     }
-    
+    //returns basic research informationo
     function getResearchInfo() public view onlyOwner returns(string memory,string memory,string memory,uint,int){
         return( 
             _name,
@@ -109,45 +123,78 @@ contract Research {
             _totalFunds,
             _totalPatients);
     }
+    //returns information about specific user/patient
     function getPatientInfo(uint index) public view onlyOwner returns(data memory){
         return(_patientData[index]);
     }
+    //returns balance left in the research fund
     function getFund() public view onlyOwner returns(uint){
         return address(this).balance;
     }
     
+    //returns something shit
     function getAddress()public returns(address){
         // return this.address;
     }
-    
-    function splitIncome() public payable returns(address){
+    //splits income among patients and the researcher
+    function splitIncome(address buyerAddress) public payable returns(address){
         uint _sendFund=_totalFunds/(_patientData.length*2);
         // address(this).transfer(_owner,)
         for (uint i=0; i<_patientData.length; i++) {
             address(_patientData[i].patient_address_).transfer(_sendFund);
+            // User
         }
         address(_owner).transfer(address(this).balance);
+        _buyerAddress.push(buyerAddress);
     }
     
+    //returns complete data about the patients who are giving data for rresearch
     function getCompleteData()public returns(data[] memory){
         return _patientData;
+    }
+    
+    function getBuyers() public returns(address[] memory){
+        return _buyerAddress;
     }
 }
 
 contract Buyer{
     using SafeMath for uint256;
     using SafeMath for int256;
-    address payable _owner;
+    address _owner;
     string _name;
-    function getData(address research) private returns(Research.data[] memory){
+    
+    //constructor for initializing the Buyer
+    constructor(string  memory name,address ownerAddress) public {
+        _owner=ownerAddress;
+        _name=name;
+    }
+    
+    
+    //returns data and transfers eth to the researcher also callls split func in the researcher contract
+    function getData(address payable research) private returns(Research.data[] memory){
         Research.data[] memory totaldata=Research(research).getCompleteData();
         uint total_cost=Research(research).getCostPerData()*totaldata.length;
-        address(_owner).transfer
+        address(research).transfer(total_cost);
+        Research(research).splitIncome(msg.sender);
         return (totaldata);
-        
+    }
+    
+    function getBalance() private returns(uint){
+        return address(this).balance;
     }
 }
 
 contract User{
+    address[] _buyers;
+    address _owner;
+    string _name;
+    constructor(string memory name,address ownerAddress)public{
+        _name=name;
+        _owner=ownerAddress;
+    }
     
+    function addBuyer(address buyerAddress)public {
+        _buyers.push(buyerAddress);
+    }
 }
